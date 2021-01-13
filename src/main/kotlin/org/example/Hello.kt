@@ -7,24 +7,37 @@ import kotlinx.coroutines.channels.produce
 
 data class Torcedor(val time:String)
 class Onibus(val time:String,  val tocedores:MutableList<Torcedor>){
-
+    var scopedapartida:Job? = null
+    var jaPartiu = false
    suspend fun sair()= runBlocking {
-
-
+       if(tocedores.size==1){
+          scopedapartida =  GlobalScope.launch {
+               partida()
+           }
+       }
         if(tocedores.size==5){
-             print("onibus "+time+" precisa sair esta lotado!!")
-             print(tocedores)
-             this@runBlocking.cancel()
-        }
+            jaPartiu = true
+            scopedapartida?.cancelChildren()
+            scopedapartida?.job?.cancelChildren()
+            println("------------------------------------------------------- CHEIO")
+            println("onibus "+time+" precisa sair esta lotado!! \ntocedores $tocedores")
+            println("------------------------------------------------------- CHEIO")
 
-        println("onibus "+time+" iniciou contagem para saida")
-        partida()
+
+            this.coroutineContext.cancel()
+        }
     }
 
-    suspend fun partida()= runBlocking {
-        delay(1000)
-        println("onibus "+time+" saiu")
-        println(tocedores)
+    suspend fun partida() {
+        delay(10000)
+        if(jaPartiu) {
+            jaPartiu = false
+            return
+        }
+        println("------------------------------------------------------- PARTIDA")
+        if(tocedores.size<5)  println("onibus "+time+" saiu sem está cheio \ntocedores $tocedores") else println("onibus "+time+" saiu")
+        println("------------------------------------------------------- PARTIDA")
+
     }
 }
 
@@ -39,43 +52,35 @@ fun main() = runBlocking{
     val oni1 = Onibus("fortaleza",mutableListOf<Torcedor>())
     val oni2 = Onibus("ceara", mutableListOf<Torcedor>())
 
-        launch {
-            println("iniciou a ouvir onibus1")
-            for (tocedor in onibus1channel){
-                if(oni1.tocedores.size==4){
-                    runBlocking {
-                        oni1.sair()
-                    }
-                }
-                oni1.tocedores.add(tocedor)
-
-            }
+    launch {
+        println("iniciou a ouvir onibus1")
+        for (tocedor in onibus1channel){
+            oni1.tocedores.add(tocedor)
+            oni1.sair()
         }
-        launch {
-            println("iniciou a ouvir onibus2")
-            for (tocedor in onibus2channel){
-                if(oni2.tocedores.size==4){
-                    runBlocking {
-                        oni2.sair()
-                    }
-
-                }
-                oni2.tocedores.add(tocedor)
-
-            }
+    }
+    launch {
+        println("iniciou a ouvir onibus2")
+        for (tocedor in onibus2channel){
+            oni2.tocedores.add(tocedor)
+            oni2.sair()
         }
+    }
+
+
 
 
 
    launch {
        // Criar e enviar tocedor para amc
-       for (i in 1..10){
+       for (i in 1..9){
            if (i%2==0){
                 channelTorcedor.send(Torcedor("fortaleza"))
            }else{
                 channelTorcedor.send(Torcedor("ceara"))
            }
        }
+
    }
 
     fun amc(channelTorcedor: ReceiveChannel<Torcedor>, onibus1:Channel<Torcedor>, onibus2:Channel<Torcedor>) = produce<Torcedor> {
@@ -87,6 +92,17 @@ fun main() = runBlocking{
                 println("1 torcedor do ceara")
                 onibus2.send(torcedor)
             }
+        }
+    }
+
+
+    GlobalScope.launch {
+        runBlocking {
+              withTimeout(60){
+                  delay(100)
+                 println("Iniciou time out ${this.coroutineContext}")
+            }
+            println("time out ")
         }
     }
 
